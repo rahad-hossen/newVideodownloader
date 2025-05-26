@@ -88,7 +88,7 @@ app.post("/download", async (req, res) => {
       output: outputPathTemplate,
       format: "bestvideo+bestaudio/best",
       mergeOutputFormat: "mp4",
-      cookies: "cookies.txt" // তোমার যদি cookies.txt থাকে
+      cookies: "cookiesn.txt" // তোমার যদি cookies.txt থাকে
     });
 
     console.log(result);
