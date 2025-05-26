@@ -23,6 +23,7 @@ app.post("/download", async (req, res) => {
 
   try {
     const result = await ytdlp(videoUrl, {
+      execPath: path.join(__dirname, "yt-dlp"),
       output: outputPath,
       format: "bestvideo+bestaudio/best",
       mergeOutputFormat: "mp4",
