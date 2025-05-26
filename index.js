@@ -68,7 +68,7 @@
 //new edition
 
 const express = require("express");
-const ytdlp = require("yt-dlp-exec");
+const ytdlp = require("yt-dlp");
 const path = require("path");
 const fs = require("fs");
 
