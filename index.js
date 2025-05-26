@@ -95,7 +95,7 @@ app.post("/download", async (req, res) => {
       output: outputPath,
       format: "bestvideo+bestaudio/best",
       mergeOutputFormat: "mp4",
-      cookies: "cookies.txt"
+      cookies: "cookiesn.txt"
       // ⚠ ffmpegLocation দরকার নেই Render-এ
     });
 
