@@ -68,7 +68,7 @@
 //new edition
 
 const express = require("express");
-const ytdlp = require("yt-dlp");
+const ytdlp = require("yt-dlp-exec");
 const path = require("path");
 const fs = require("fs");
 
@@ -95,7 +95,7 @@ app.post("/download", async (req, res) => {
       output: outputPath,
       format: "bestvideo+bestaudio/best",
       mergeOutputFormat: "mp4",
-      cookies: "cookiess.txt"
+      cookies: "cookies.txt"
       // ⚠ ffmpegLocation দরকার নেই Render-এ
     });
 
