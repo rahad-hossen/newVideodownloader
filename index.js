@@ -54,7 +54,7 @@
 // });
 
 // app.listen(port, () => {
-//   console.log(`✅ Server running at http://localhost:${port}`);
+//   console.log(` Server running at http://localhost:${port}`);
 // });
 
 
@@ -95,7 +95,7 @@ app.post("/download", async (req, res) => {
       output: outputPath,
       format: "bestvideo+bestaudio/best",
       mergeOutputFormat: "mp4",
-      cookies: "cookiesn.txt"
+      cookies: "cookiess.txt"
       // ⚠ ffmpegLocation দরকার নেই Render-এ
     });
 
