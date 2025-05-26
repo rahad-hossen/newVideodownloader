@@ -25,7 +25,8 @@ app.post("/download", async (req, res) => {
     const result = await ytdlp(videoUrl, {
       output: outputPath,
       format: "bestvideo+bestaudio/best",
-      mergeOutputFormat: "mp4"
+      mergeOutputFormat: "mp4",
+      cookies: "cookies.txt"
       // ⚠️ ffmpegLocation দরকার নেই Render-এ
     });
 
