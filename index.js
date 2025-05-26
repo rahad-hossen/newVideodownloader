@@ -56,6 +56,80 @@
 //   console.log(` Server is running on http://localhost:${port}`);
 // });
 
+//======================2nd editon===================
+
+
+// const express = require("express");
+// const ytdlp = require("yt-dlp-exec");
+// const path = require("path");
+// const fs = require("fs");
+
+// const app = express();
+// const port = process.env.PORT || 3000;
+
+// // Ensure 'downloads' folder exists
+// if (!fs.existsSync("downloads")) {
+//   fs.mkdirSync("downloads");
+// }
+
+// // Serve static files from 'public' folder (যেখানে তোমার HTML+JS আছে)
+// app.use(express.static("public"));
+
+// // Parse JSON body
+// app.use(express.json());
+
+// app.post("/download", async (req, res) => {
+//   const videoUrl = req.body.url;
+//   if (!videoUrl) return res.status(400).send("No URL provided");
+
+//   const outputPathTemplate = "downloads/%(title)s.%(ext)s";
+
+//   try {
+//     // ভিডিও ডাউনলোড করো
+//     const result = await ytdlp(videoUrl, {
+//       output: outputPathTemplate,
+//       format: "bestvideo+bestaudio/best",
+//       mergeOutputFormat: "mp4",
+//       cookies: "cookiesn.txt" // তোমার যদি cookies.txt থাকে
+//     });
+
+//     console.log(result);
+
+//     // সর্বশেষ তৈরি হওয়া ফাইল বের করো
+//     const files = fs.readdirSync("downloads");
+//     const newestFile = files
+//       .map(f => ({ name: f, time: fs.statSync(path.join("downloads", f)).mtime.getTime() }))
+//       .sort((a, b) => b.time - a.time)[0];
+
+//     const filePath = path.join("downloads", newestFile.name);
+//     const stat = fs.statSync(filePath);
+
+//     res.setHeader("Content-Length", stat.size);
+//     res.setHeader("Content-Disposition", `attachment; filename="${newestFile.name}"`);
+
+//     // ফাইল স্ট্রিম করে পাঠাও
+//     const readStream = fs.createReadStream(filePath);
+//     readStream.pipe(res);
+
+//     // ডাউনলোড শেষ হলে ফাইল মুছে ফেলো (optional)
+//     readStream.on("close", () => {
+//       fs.unlink(filePath, err => {
+//         if (err) console.error("Failed to delete file:", err);
+//       });
+//     });
+
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).send("Download failed");
+//   }
+// });
+
+// app.listen(port, () => {
+//   console.log(`✅ Server running on http://localhost:${port}`);
+// });
+
+//==============================third edition=====================
+
 
 const express = require("express");
 const ytdlp = require("yt-dlp-exec");
@@ -65,15 +139,12 @@ const fs = require("fs");
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Ensure 'downloads' folder exists
+// downloads ফোল্ডার যদি না থাকে তাহলে তৈরি করো
 if (!fs.existsSync("downloads")) {
   fs.mkdirSync("downloads");
 }
 
-// Serve static files from 'public' folder (যেখানে তোমার HTML+JS আছে)
-app.use(express.static("public"));
-
-// Parse JSON body
+app.use(express.static("public"));  // তোমার public ফোল্ডার থেকে HTML, CSS, JS সার্ভ করবে
 app.use(express.json());
 
 app.post("/download", async (req, res) => {
@@ -83,33 +154,44 @@ app.post("/download", async (req, res) => {
   const outputPathTemplate = "downloads/%(title)s.%(ext)s";
 
   try {
-    // ভিডিও ডাউনলোড করো
+    // ভিডিও ডাউনলোড
     const result = await ytdlp(videoUrl, {
       output: outputPathTemplate,
       format: "bestvideo+bestaudio/best",
       mergeOutputFormat: "mp4",
-      cookies: "cookiesn.txt" // তোমার যদি cookies.txt থাকে
+      cookies: "cookiesn.txt"
     });
 
     console.log(result);
 
-    // সর্বশেষ তৈরি হওয়া ফাইল বের করো
+    // সর্বশেষ তৈরি হওয়া ফাইলটি খুঁজে বের করা
     const files = fs.readdirSync("downloads");
     const newestFile = files
-      .map(f => ({ name: f, time: fs.statSync(path.join("downloads", f)).mtime.getTime() }))
+      .map(f => ({
+        name: f,
+        time: fs.statSync(path.join("downloads", f)).mtime.getTime()
+      }))
       .sort((a, b) => b.time - a.time)[0];
 
     const filePath = path.join("downloads", newestFile.name);
     const stat = fs.statSync(filePath);
 
+    // Content-Length হেডার সেট করা
     res.setHeader("Content-Length", stat.size);
-    res.setHeader("Content-Disposition", `attachment; filename="${newestFile.name}"`);
 
-    // ফাইল স্ট্রিম করে পাঠাও
+    // Content-Disposition হেডার (বাংলা নামের জন্য নিরাপদ)
+    const filename = newestFile.name;
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename.replace(/"/g, "'")}"` +
+      `; filename*=UTF-8''${encodeURIComponent(filename)}`
+    );
+
+    // ফাইল স্ট্রিম করে পাঠানো
     const readStream = fs.createReadStream(filePath);
     readStream.pipe(res);
 
-    // ডাউনলোড শেষ হলে ফাইল মুছে ফেলো (optional)
+    // স্ট্রিম শেষ হলে ফাইল মুছে ফেলা (optional)
     readStream.on("close", () => {
       fs.unlink(filePath, err => {
         if (err) console.error("Failed to delete file:", err);
@@ -125,5 +207,6 @@ app.post("/download", async (req, res) => {
 app.listen(port, () => {
   console.log(`✅ Server running on http://localhost:${port}`);
 });
+
 
 
