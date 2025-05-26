@@ -4,7 +4,13 @@ const path = require("path");
 const fs = require("fs");
 
 const app = express();
-const port = 3000;
+// Render এ চলার সময় PORT env variable থেকে port নিতে হয়
+const port = process.env.PORT || 3000;
+
+// Ensure 'downloads' folder exists
+if (!fs.existsSync("downloads")) {
+  fs.mkdirSync("downloads");
+}
 
 app.use(express.static("public"));
 app.use(express.json());
@@ -19,18 +25,26 @@ app.post("/download", async (req, res) => {
     const result = await ytdlp(videoUrl, {
       output: outputPath,
       format: "bestvideo+bestaudio/best",
-      mergeOutputFormat: "mp4",
-      ffmpegLocation: 'K:/ffmpeg-master-latest-win64-gpl-shared/ffmpeg-master-latest-win64-gpl-shared/bin/ffmpeg.exe'
-
+      mergeOutputFormat: "mp4"
+      // ⚠️ ffmpegLocation দরকার নেই Render-এ
     });
+
     console.log(result);
 
+    // সর্বশেষ তৈরি হওয়া ফাইলটা বের করা
     const files = fs.readdirSync("downloads");
     const newestFile = files
       .map(f => ({ name: f, time: fs.statSync(path.join("downloads", f)).mtime.getTime() }))
       .sort((a, b) => b.time - a.time)[0];
 
-    res.download(path.join("downloads", newestFile.name));
+    res.download(path.join("downloads", newestFile.name), (err) => {
+      if (err) console.error("Download error:", err);
+
+      // ডাউনলোডের পর temp ফাইল মুছে ফেলা (optional)
+      fs.unlink(path.join("downloads", newestFile.name), (err) => {
+        if (err) console.error("Failed to delete file:", err);
+      });
+    });
   } catch (err) {
     console.error(err);
     res.status(500).send("Download failed");
@@ -38,5 +52,5 @@ app.post("/download", async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
+  console.log(`✅ Server is running on http://localhost:${port}`);
 });
