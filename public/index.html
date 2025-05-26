@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -37,6 +37,74 @@
       } catch (err) {
         status.innerText = "Failed to download";
       }
+    }
+  </script>
+</body>
+</html> -->
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>YouTube Downloader</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 40px; background: #f0f0f0; }
+    input { width: 300px; padding: 10px; font-size: 16px; }
+    button { padding: 10px 20px; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <h1>YouTube Video Downloader</h1>
+  <input type="text" id="url" placeholder="Enter YouTube URL" />
+  <button onclick="download()">Download</button>
+  <p id="status"></p>
+
+  <script>
+    function download() {
+      const url = document.getElementById("url").value;
+      const status = document.getElementById("status");
+      if (!url) {
+        status.innerText = "Please enter a URL";
+        return;
+      }
+
+      status.innerText = "Starting download...";
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/download");
+      xhr.responseType = "blob";
+      xhr.setRequestHeader("Content-Type", "application/json");
+
+      xhr.onprogress = function(event) {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          status.innerText = `Downloading... ${percent}%`;
+        } else {
+          status.innerText = `Downloading...`;
+        }
+      };
+
+      xhr.onload = function() {
+        if (xhr.status === 200) {
+          const blob = xhr.response;
+          const link = document.createElement("a");
+          link.href = window.URL.createObjectURL(blob);
+          link.download = "video.mp4";
+          link.click();
+          status.innerText = "Download completed!";
+        } else {
+          status.innerText = "Failed to download";
+        }
+      };
+
+      xhr.onerror = function() {
+        status.innerText = "Failed to download";
+      };
+
+      xhr.send(JSON.stringify({ url }));
     }
   </script>
 </body>
