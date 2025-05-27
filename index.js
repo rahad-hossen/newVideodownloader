@@ -71,58 +71,85 @@ const express = require("express");
 const ytdlp = require("yt-dlp-exec");
 const path = require("path");
 const fs = require("fs");
+const sanitize = require("sanitize-filename"); // Add this package
 
 const app = express();
-// Render এ চলার সময় PORT env variable থেকে port নিতে হয়
 const port = process.env.PORT || 3000;
 
 // Ensure 'downloads' folder exists
-if (!fs.existsSync("downloads")) {
-  fs.mkdirSync("downloads");
+const downloadsDir = "downloads";
+if (!fs.existsSync(downloadsDir)) {
+  fs.mkdirSync(downloadsDir);
 }
 
 app.use(express.static("public"));
 app.use(express.json());
 
+// Rate limiting (important for public APIs)
+const rateLimit = require("express-rate-limit");
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5 // limit each IP to 5 requests per windowMs
+});
+app.use("/download", limiter);
+
 app.post("/download", async (req, res) => {
   const videoUrl = req.body.url;
-  if (!videoUrl) return res.status(400).send("No URL provided");
-
-  const outputPath = "downloads/%(title)s.%(ext)s";
+  if (!videoUrl || !isValidUrl(videoUrl)) {
+    return res.status(400).json({ error: "Invalid or missing URL" });
+  }
 
   try {
     const result = await ytdlp(videoUrl, {
-      output: outputPath,
+      output: path.join(downloadsDir, "%(title)s.%(ext)s"),
       format: "bestvideo+bestaudio/best",
       mergeOutputFormat: "mp4",
       cookies: "cookies.txt"
-      // ⚠ ffmpegLocation দরকার নেই Render-এ
     });
 
-    console.log(result);
+    const files = fs.readdirSync(downloadsDir);
+    if (files.length === 0) throw new Error("No files downloaded");
 
-    // সর্বশেষ তৈরি হওয়া ফাইলটা বের করা
-    const files = fs.readdirSync("downloads");
     const newestFile = files
-      .map(f => ({ name: f, time: fs.statSync(path.join("downloads", f)).mtime.getTime() }))
+      .map(f => ({ 
+        name: f, 
+        time: fs.statSync(path.join(downloadsDir, f)).mtime.getTime() 
+      }))
       .sort((a, b) => b.time - a.time)[0];
 
-    res.download(path.join("downloads", newestFile.name), (err) => {
-      if (err) console.error("Download error:", err);
+    const safeFilename = sanitize(newestFile.name);
+    const filePath = path.join(downloadsDir, newestFile.name);
 
-      // ডাউনলোডের পর temp ফাইল মুছে ফেলা (optional)
-      fs.unlink(path.join("downloads", newestFile.name), (err) => {
-        if (err) console.error("Failed to delete file:", err);
+    res.download(filePath, safeFilename, (err) => {
+      if (err) console.error("Download error:", err);
+      
+      // Cleanup
+      fs.unlink(filePath, (err) => {
+        if (err) console.error("Cleanup error:", err);
       });
     });
+
   } catch (err) {
-    console.error(err);
-    res.status(500).send("Download failed");
+    console.error("Download failed:", err);
+    res.status(500).json({ 
+      error: "Download failed",
+      details: err.message 
+    });
   }
 });
 
+// Helper function to validate URLs
+function isValidUrl(string) {
+  try {
+    new URL(string);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 app.listen(port, () => {
-  console.log(` Server is running on http://localhost:${port}`);
+  console.log(`Server running on http://localhost:${port}`);
 });
 
 //======================2nd editon===================
