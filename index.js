@@ -7,87 +7,123 @@ const sanitize = require('sanitize-filename');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Create downloads folder
+// Configuration
 const downloadsDir = 'downloads';
-if (!fs.existsSync(downloadsDir)) {
-  fs.mkdirSync(downloadsDir);
-}
+const cookiesPath = process.env.COOKIES_PATH || 'cookies.txt';
 
-// Check and create cookies file if not exists
-const cookiesFile = 'cookies.txt';
-if (!fs.existsSync(cookiesFile)) {
-  fs.writeFileSync(cookiesFile, '', { flag: 'wx' }); // Create empty file if doesn't exist
-  console.log('Created empty cookies.txt file. Add your YouTube cookies if needed.');
-}
+// Initialize directories
+[downloadsDir].forEach(dir => {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+});
 
+// Middleware
 app.use(express.static('public'));
 app.use(express.json());
-
-// Rate limiting
-const rateLimit = require('express-rate-limit');
-app.use('/download', rateLimit({
+app.use('/download', require('express-rate-limit')({
   windowMs: 15 * 60 * 1000,
   max: 5
 }));
 
+// Routes
 app.post('/download', async (req, res) => {
   try {
-    const videoUrl = req.body.url;
-    if (!videoUrl || !isValidUrl(videoUrl)) {
-      return res.status(400).json({ error: 'Invalid URL' });
+    const { url } = req.body;
+    
+    if (!url || !isValidUrl(url)) {
+      return res.status(400).json({ error: 'Invalid YouTube URL' });
     }
 
     const options = {
       output: path.join(downloadsDir, '%(title)s.%(ext)s'),
       format: 'bestvideo+bestaudio/best',
       mergeOutputFormat: 'mp4',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      referer: 'https://www.youtube.com/',
+      userAgent: getRandomUserAgent()
     };
 
-    // Check if cookies file has content (not just empty file)
-    const cookiesContent = fs.readFileSync(cookiesFile, 'utf8');
-    if (cookiesContent.trim().length > 0) {
-      options.cookies = cookiesFile;
-      console.log('Using cookies.txt for authentication');
+    // Add cookies if exists and valid
+    if (await isValidCookiesFile(cookiesPath)) {
+      options.cookies = cookiesPath;
+      console.log('Using cookies for authentication');
     }
 
-    await ytdlp(videoUrl, options);
+    await ytdlp(url, options);
 
-    const files = fs.readdirSync(downloadsDir);
-    const newestFile = files
-      .map(f => ({ 
-        name: f, 
-        time: fs.statSync(path.join(downloadsDir, f)).mtime.getTime() 
-      }))
-      .sort((a, b) => b.time - a.time)[0];
+    const downloadedFile = getNewestFile(downloadsDir);
+    if (!downloadedFile) throw new Error('No file downloaded');
 
     res.download(
-      path.join(downloadsDir, newestFile.name),
-      sanitize(newestFile.name),
-      () => fs.unlinkSync(path.join(downloadsDir, newestFile.name))
+      downloadedFile.path,
+      downloadedFile.safeName,
+      () => fs.unlinkSync(downloadedFile.path)
     );
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ 
-      error: 'Download failed',
-      details: err.message.includes('Sign in') 
-        ? 'This video requires valid cookies in cookies.txt' 
-        : err.message 
-    });
+    handleDownloadError(res, err);
   }
 });
 
+// Helper Functions
 function isValidUrl(url) {
   try {
-    new URL(url);
-    return true;
+    return new URL(url).hostname.includes('youtube');
   } catch {
     return false;
   }
 }
 
+async function isValidCookiesFile(filePath) {
+  try {
+    return fs.existsSync(filePath) && 
+           fs.readFileSync(filePath, 'utf8').includes('youtube.com');
+  } catch {
+    return false;
+  }
+}
+
+function getNewestFile(dir) {
+  const files = fs.readdirSync(dir)
+    .map(f => ({
+      name: f,
+      path: path.join(dir, f),
+      time: fs.statSync(path.join(dir, f)).mtime.getTime()
+    }))
+    .sort((a, b) => b.time - a.time);
+
+  return files[0] ? {
+    ...files[0],
+    safeName: sanitize(files[0].name)
+  } : null;
+}
+
+function getRandomUserAgent() {
+  const agents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.210 Mobile Safari/537.36'
+  ];
+  return agents[Math.floor(Math.random() * agents.length)];
+}
+
+function handleDownloadError(res, err) {
+  console.error('Download Error:', err);
+  
+  let message = 'Download failed';
+  if (err.message.includes('Sign in')) {
+    message = 'This video requires authentication. Please ensure cookies.txt is properly configured.';
+  } else if (err.message.includes('Private video')) {
+    message = 'Cannot download private video';
+  }
+
+  res.status(500).json({ 
+    error: message,
+    details: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+}
+
+// Start Server
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
-  console.log(`Cookies file path: ${path.resolve(cookiesFile)}`);
+  console.log(`Cookies path: ${cookiesPath}`);
+  console.log(`Downloads dir: ${path.resolve(downloadsDir)}`);
 });
