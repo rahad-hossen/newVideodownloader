@@ -13,6 +13,13 @@ if (!fs.existsSync(downloadsDir)) {
   fs.mkdirSync(downloadsDir);
 }
 
+// Check and create cookies file if not exists
+const cookiesFile = 'cookies.txt';
+if (!fs.existsSync(cookiesFile)) {
+  fs.writeFileSync(cookiesFile, '', { flag: 'wx' }); // Create empty file if doesn't exist
+  console.log('Created empty cookies.txt file. Add your YouTube cookies if needed.');
+}
+
 app.use(express.static('public'));
 app.use(express.json());
 
@@ -37,8 +44,11 @@ app.post('/download', async (req, res) => {
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     };
 
-    if (fs.existsSync('cookies.txt')) {
-      options.cookies = 'cookies.txt';
+    // Check if cookies file has content (not just empty file)
+    const cookiesContent = fs.readFileSync(cookiesFile, 'utf8');
+    if (cookiesContent.trim().length > 0) {
+      options.cookies = cookiesFile;
+      console.log('Using cookies.txt for authentication');
     }
 
     await ytdlp(videoUrl, options);
@@ -62,7 +72,7 @@ app.post('/download', async (req, res) => {
     res.status(500).json({ 
       error: 'Download failed',
       details: err.message.includes('Sign in') 
-        ? 'This video requires cookies (add cookies.txt)' 
+        ? 'This video requires valid cookies in cookies.txt' 
         : err.message 
     });
   }
@@ -79,4 +89,5 @@ function isValidUrl(url) {
 
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
+  console.log(`Cookies file path: ${path.resolve(cookiesFile)}`);
 });
