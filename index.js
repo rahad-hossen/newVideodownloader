@@ -71,7 +71,7 @@ const express = require("express");
 const ytdlp = require("yt-dlp-exec");
 const path = require("path");
 const fs = require("fs");
-const sanitize = require("sanitize-filename"); // Add this package
+const sanitize = require("sanitize-filename");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -85,11 +85,11 @@ if (!fs.existsSync(downloadsDir)) {
 app.use(express.static("public"));
 app.use(express.json());
 
-// Rate limiting (important for public APIs)
+// Rate limiting
 const rateLimit = require("express-rate-limit");
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5 // limit each IP to 5 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 5
 });
 app.use("/download", limiter);
 
@@ -100,22 +100,28 @@ app.post("/download", async (req, res) => {
   }
 
   try {
-    const result = await ytdlp(videoUrl, {
+    // Try with cookies first, fallback to without cookies
+    const options = {
       output: path.join(downloadsDir, "%(title)s.%(ext)s"),
       format: "bestvideo+bestaudio/best",
       mergeOutputFormat: "mp4",
-      cookies: "cookies.txt",
-      cookiesFromBrowser: "firefox",
       userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    });
+    };
+
+    // Only add cookies if file exists
+    if (fs.existsSync("cookies.txt")) {
+      options.cookies = "cookies.txt";
+    }
+
+    const result = await ytdlp(videoUrl, options);
 
     const files = fs.readdirSync(downloadsDir);
     if (files.length === 0) throw new Error("No files downloaded");
 
     const newestFile = files
-      .map(f => ({ 
-        name: f, 
-        time: fs.statSync(path.join(downloadsDir, f)).mtime.getTime() 
+      .map(f => ({
+        name: f,
+        time: fs.statSync(path.join(downloadsDir, f)).mtime.getTime()
       }))
       .sort((a, b) => b.time - a.time)[0];
 
@@ -124,8 +130,6 @@ app.post("/download", async (req, res) => {
 
     res.download(filePath, safeFilename, (err) => {
       if (err) console.error("Download error:", err);
-      
-      // Cleanup
       fs.unlink(filePath, (err) => {
         if (err) console.error("Cleanup error:", err);
       });
@@ -133,14 +137,15 @@ app.post("/download", async (req, res) => {
 
   } catch (err) {
     console.error("Download failed:", err);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Download failed",
-      details: err.message 
+      details: err.message.includes("Sign in to confirm") 
+        ? "This video requires cookies for authentication" 
+        : err.message
     });
   }
 });
 
-// Helper function to validate URLs
 function isValidUrl(string) {
   try {
     new URL(string);
