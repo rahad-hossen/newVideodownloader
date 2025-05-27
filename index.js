@@ -6,6 +6,10 @@ const fs = require("fs");
 const app = express();
 const port = process.env.PORT || 3000;
 
+// cookies.txt create from environment variable
+fs.writeFileSync("cookies.txt", process.env.YTDLP_COOKIES || "", "utf-8");
+
+// Ensure 'downloads' folder exists
 if (!fs.existsSync("downloads")) {
   fs.mkdirSync("downloads");
 }
