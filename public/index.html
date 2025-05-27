@@ -5,267 +5,55 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>YouTube Downloader</title>
   <style>
-    body { 
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-      text-align: center; 
-      padding: 40px; 
-      background: #f5f5f5; 
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    .container {
-      background: white;
-      padding: 30px;
-      border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    input { 
-      width: 70%; 
-      padding: 12px; 
-      font-size: 16px; 
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      margin-right: 10px;
-    }
-    button { 
-      padding: 12px 24px; 
-      font-size: 16px; 
-      background: #ff0000;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-    button:hover {
-      background: #cc0000;
-    }
-    #status {
-      margin-top: 20px;
-      color: #666;
-      min-height: 24px;
-    }
-    .loader {
-      display: none;
-      margin: 20px auto;
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid #ff0000;
-      border-radius: 50%;
-      width: 30px;
-      height: 30px;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+    input { width: 70%; padding: 10px; margin-right: 10px; }
+    button { padding: 10px 20px; background: #ff0000; color: white; border: none; cursor: pointer; }
+    #status { margin-top: 15px; color: #666; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>YouTube Video Downloader</h1>
-    <div>
-      <input type="text" id="url" placeholder="Enter YouTube URL (e.g., https://www.youtube.com/watch?v=...)" />
-      <button onclick="download()">Download</button>
-    </div>
-    <div class="loader" id="loader"></div>
-    <p id="status"></p>
+  <h1>YouTube Downloader</h1>
+  <div>
+    <input type="text" id="url" placeholder="Enter YouTube URL">
+    <button onclick="download()">Download</button>
   </div>
-
-  <script>
-    async function download() {
-      const urlInput = document.getElementById("url");
-      const status = document.getElementById("status");
-      const loader = document.getElementById("loader");
-      
-      const url = urlInput.value.trim();
-      
-      if (!url) {
-        status.innerText = "Please enter a YouTube URL";
-        return;
-      }
-
-      if (!isValidYouTubeUrl(url)) {
-        status.innerText = "Please enter a valid YouTube URL";
-        return;
-      }
-
-      // Show loading state
-      status.innerText = "Processing...";
-      loader.style.display = "block";
-      urlInput.disabled = true;
-
-      try {
-        const res = await fetch("/download", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url })
-        });
-
-        if (!res.ok) {
-          const error = await res.json();
-          throw new Error(error.error || "Download failed");
-        }
-
-        // Get filename from content-disposition header
-        const contentDisposition = res.headers.get('content-disposition');
-        let filename = 'video.mp4';
-        if (contentDisposition) {
-          const match = contentDisposition.match(/filename="?(.+?)"?(;|$)/);
-          if (match) filename = match[1];
-        }
-
-        const blob = await res.blob();
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        status.innerText = "Download completed!";
-      } catch (err) {
-        status.innerText = `Error: ${err.message}`;
-        console.error("Download error:", err);
-      } finally {
-        loader.style.display = "none";
-        urlInput.disabled = false;
-      }
-    }
-
-    function isValidYouTubeUrl(url) {
-      const pattern = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+/;
-      return pattern.test(url);
-    }
-
-    // Allow Enter key to trigger download
-    document.getElementById("url").addEventListener("keyup", function(event) {
-      if (event.key === "Enter") {
-        download();
-      }
-    });
-  </script>
-</body>
-</html>
-
-<!-- 2nd edition -->
-
-<!-- <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>YouTube Downloader</title>
-  <style>
-    body { font-family: sans-serif; text-align: center; padding: 40px; background: #f0f0f0; }
-    input { width: 300px; padding: 10px; font-size: 16px; }
-    button { padding: 10px 20px; font-size: 16px; }
-  </style>
-</head>
-<body>
-  <h1>YouTube Video Downloader</h1>
-  <input type="text" id="url" placeholder="Enter YouTube URL" />
-  <button onclick="download()">Download</button>
-  <p id="status"></p>
-
-  <script>
-    function download() {
-      const url = document.getElementById("url").value;
-      const status = document.getElementById("status");
-      if (!url) {
-        status.innerText = "Please enter a URL";
-        return;
-      }
-
-      status.innerText = "Starting download...";
-
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/download");
-      xhr.responseType = "blob";
-      xhr.setRequestHeader("Content-Type", "application/json");
-
-      xhr.onprogress = function(event) {
-        if (event.lengthComputable) {
-          const percent = Math.round((event.loaded / event.total) * 100);
-          status.innerText = `Downloading... ${percent}%`;
-        } else {
-          status.innerText = `Downloading...`;
-        }
-      };
-
-      xhr.onload = function() {
-        if (xhr.status === 200) {
-          const blob = xhr.response;
-          const link = document.createElement("a");
-          link.href = window.URL.createObjectURL(blob);
-          link.download = "video.mp4";
-          link.click();
-          status.innerText = "Download completed!";
-        } else {
-          status.innerText = "Failed to download";
-        }
-      };
-
-      xhr.onerror = function() {
-        status.innerText = "Failed to download";
-      };
-
-      xhr.send(JSON.stringify({ url }));
-    }
-  </script>
-</body>
-</html> -->
-
-<!-- 3rd edition -->
-
-
-<!-- <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>YouTube Downloader</title>
-  <style>
-    body { font-family: sans-serif; text-align: center; padding: 40px; background: #f0f0f0; }
-    input { width: 300px; padding: 10px; font-size: 16px; }
-    button { padding: 10px 20px; font-size: 16px; }
-  </style>
-</head>
-<body>
-  <h1>YouTube Video Downloader</h1>
-  <input type="text" id="url" placeholder="Enter YouTube URL" />
-  <button onclick="download()">Download</button>
   <p id="status"></p>
 
   <script>
     async function download() {
-      const url = document.getElementById("url").value;
-      const status = document.getElementById("status");
+      const url = document.getElementById('url').value.trim();
+      const status = document.getElementById('status');
+      
       if (!url) {
-        status.innerText = "Please enter a URL";
+        status.textContent = 'Please enter a URL';
         return;
       }
-      status.innerText = "Downloading...";
 
+      status.textContent = 'Downloading...';
+      
       try {
-        const res = await fetch("/download", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const response = await fetch('/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url })
         });
-        if (!res.ok) throw new Error("Download failed");
 
-        const blob = await res.blob();
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = "video.mp4";
-        link.click();
-        status.innerText = "Download completed!";
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Download failed');
+        }
+
+        const blob = await response.blob();
+        const downloadUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = 'video.mp4';
+        a.click();
+        status.textContent = 'Download complete!';
       } catch (err) {
-        status.innerText = "Failed to download";
+        status.textContent = `Error: ${err.message}`;
       }
     }
   </script>
 </body>
 </html>
- -->
