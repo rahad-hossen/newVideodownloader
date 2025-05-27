@@ -1,13 +1,22 @@
 const express = require("express");
-const ytdlp = require("youtube-dl-exec");
-const fs = require("fs");
+const ytdlp = require("yt-dlp-exec");
 const path = require("path");
+const fs = require("fs");
 
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Ensure downloads folder exists
 if (!fs.existsSync("downloads")) {
   fs.mkdirSync("downloads");
+}
+
+// Write cookies.txt from environment variable (only if COOKIE_STRING exists)
+if (process.env.COOKIE_STRING) {
+  fs.writeFileSync("cookies.txt", process.env.COOKIE_STRING);
+  console.log("cookies.txt created from environment variable.");
+} else {
+  console.warn("WARNING: COOKIE_STRING env variable not found! Cookies file not created.");
 }
 
 app.use(express.static("public"));
@@ -24,17 +33,27 @@ app.post("/download", async (req, res) => {
       output: outputPath,
       format: "bestvideo+bestaudio/best",
       mergeOutputFormat: "mp4",
-      cookies: "cookies.txt", // এটি render.com-এর secret এ সংরক্ষণ করে runtime এ লিখে নিতে পারো
+      cookies: "cookies.txt",
     });
 
+    // Find newest downloaded file
     const files = fs.readdirSync("downloads");
     const newestFile = files
-      .map(f => ({ name: f, time: fs.statSync(path.join("downloads", f)).mtime.getTime() }))
+      .map((f) => ({
+        name: f,
+        time: fs.statSync(path.join("downloads", f)).mtime.getTime(),
+      }))
       .sort((a, b) => b.time - a.time)[0];
 
+    if (!newestFile) {
+      return res.status(500).send("No downloaded file found");
+    }
+
+    // Send file to client
     res.download(path.join("downloads", newestFile.name), (err) => {
       if (err) console.error("Download error:", err);
 
+      // Optionally delete file after download
       fs.unlink(path.join("downloads", newestFile.name), (err) => {
         if (err) console.error("Failed to delete file:", err);
       });
@@ -46,5 +65,5 @@ app.post("/download", async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
+  console.log(`Server running at http://localhost:${port}`);
 });
