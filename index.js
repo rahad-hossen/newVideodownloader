@@ -1,156 +1,78 @@
-
-// const express = require("express");
-// const path = require("path");
-// const fs = require("fs");
-// const { execFile } = require("child_process");
-
-// const app = express();
-// const port = process.env.PORT || 3000;
-
-// if (!fs.existsSync("downloads")) {
-//   fs.mkdirSync("downloads");
-// }
-
-// app.use(express.static("public"));
-// app.use(express.json());
-
-// app.post("/download", (req, res) => {
-//   const videoUrl = req.body.url;
-//   if (!videoUrl) return res.status(400).send("No URL provided");
-
-//   const outputPath = "downloads/%(title)s.%(ext)s";
-
-//   const args = [
-//     videoUrl,
-//     "--output", outputPath,
-//     "--format", "bestvideo+bestaudio/best",
-//     "--merge-output-format", "mp4",
-//     "--cookies", "cookies.txt"
-//   ];
-
-//   const ytdlpPath = path.join(__dirname, "yt-dlp");
-
-//   execFile(ytdlpPath, args, (error, stdout, stderr) => {
-//     if (error) {
-//       console.error("yt-dlp error:", stderr || error);
-//       return res.status(500).send("Download failed");
-//     }
-
-//     // সর্বশেষ তৈরি হওয়া ফাইলটা বের করা
-//     const files = fs.readdirSync("downloads");
-//     const newestFile = files
-//       .map(f => ({ name: f, time: fs.statSync(path.join("downloads", f)).mtime.getTime() }))
-//       .sort((a, b) => b.time - a.time)[0];
-
-//     const filePath = path.join("downloads", newestFile.name);
-//     res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(newestFile.name)}"`);
-//     res.download(filePath, (err) => {
-//       if (err) console.error("Download error:", err);
-//       fs.unlink(filePath, err => {
-//         if (err) console.error("Failed to delete file:", err);
-//       });
-//     });
-//   });
-// });
-
-// app.listen(port, () => {
-//   console.log(` Server running at http://localhost:${port}`);
-// });
-
-
-
-
-
-
-
-
-
-//new edition
-
-const express = require("express");
-const ytdlp = require("yt-dlp-exec");
-const path = require("path");
-const fs = require("fs");
-const sanitize = require("sanitize-filename");
+const express = require('express');
+const ytdlp = require('yt-dlp-exec');
+const path = require('path');
+const fs = require('fs');
+const sanitize = require('sanitize-filename');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Ensure 'downloads' folder exists
-const downloadsDir = "downloads";
+// Create downloads folder
+const downloadsDir = 'downloads';
 if (!fs.existsSync(downloadsDir)) {
   fs.mkdirSync(downloadsDir);
 }
 
-app.use(express.static("public"));
+app.use(express.static('public'));
 app.use(express.json());
 
 // Rate limiting
-const rateLimit = require("express-rate-limit");
-const limiter = rateLimit({
+const rateLimit = require('express-rate-limit');
+app.use('/download', rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5
-});
-app.use("/download", limiter);
+}));
 
-app.post("/download", async (req, res) => {
-  const videoUrl = req.body.url;
-  if (!videoUrl || !isValidUrl(videoUrl)) {
-    return res.status(400).json({ error: "Invalid or missing URL" });
-  }
-
+app.post('/download', async (req, res) => {
   try {
-    // Try with cookies first, fallback to without cookies
-    const options = {
-      output: path.join(downloadsDir, "%(title)s.%(ext)s"),
-      format: "bestvideo+bestaudio/best",
-      mergeOutputFormat: "mp4",
-      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    };
-
-    // Only add cookies if file exists
-    if (fs.existsSync("cookies.txt")) {
-      options.cookies = "cookies.txt";
+    const videoUrl = req.body.url;
+    if (!videoUrl || !isValidUrl(videoUrl)) {
+      return res.status(400).json({ error: 'Invalid URL' });
     }
 
-    const result = await ytdlp(videoUrl, options);
+    const options = {
+      output: path.join(downloadsDir, '%(title)s.%(ext)s'),
+      format: 'bestvideo+bestaudio/best',
+      mergeOutputFormat: 'mp4',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    };
+
+    if (fs.existsSync('cookies.txt')) {
+      options.cookies = 'cookies.txt';
+    }
+
+    await ytdlp(videoUrl, options);
 
     const files = fs.readdirSync(downloadsDir);
-    if (files.length === 0) throw new Error("No files downloaded");
-
     const newestFile = files
-      .map(f => ({
-        name: f,
-        time: fs.statSync(path.join(downloadsDir, f)).mtime.getTime()
+      .map(f => ({ 
+        name: f, 
+        time: fs.statSync(path.join(downloadsDir, f)).mtime.getTime() 
       }))
       .sort((a, b) => b.time - a.time)[0];
 
-    const safeFilename = sanitize(newestFile.name);
-    const filePath = path.join(downloadsDir, newestFile.name);
-
-    res.download(filePath, safeFilename, (err) => {
-      if (err) console.error("Download error:", err);
-      fs.unlink(filePath, (err) => {
-        if (err) console.error("Cleanup error:", err);
-      });
-    });
+    res.download(
+      path.join(downloadsDir, newestFile.name),
+      sanitize(newestFile.name),
+      () => fs.unlinkSync(path.join(downloadsDir, newestFile.name))
+    );
 
   } catch (err) {
-    console.error("Download failed:", err);
-    res.status(500).json({
-      error: "Download failed",
-      details: err.message.includes("Sign in to confirm") 
-        ? "This video requires cookies for authentication" 
-        : err.message
+    console.error(err);
+    res.status(500).json({ 
+      error: 'Download failed',
+      details: err.message.includes('Sign in') 
+        ? 'This video requires cookies (add cookies.txt)' 
+        : err.message 
     });
   }
 });
 
-function isValidUrl(string) {
+function isValidUrl(url) {
   try {
-    new URL(string);
+    new URL(url);
     return true;
-  } catch (_) {
+  } catch {
     return false;
   }
 }
@@ -158,158 +80,3 @@ function isValidUrl(string) {
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });
-
-//======================2nd editon===================
-
-
-// const express = require("express");
-// const ytdlp = require("yt-dlp-exec");
-// const path = require("path");
-// const fs = require("fs");
-
-// const app = express();
-// const port = process.env.PORT || 3000;
-
-// // Ensure 'downloads' folder exists
-// if (!fs.existsSync("downloads")) {
-//   fs.mkdirSync("downloads");
-// }
-
-// // Serve static files from 'public' folder (যেখানে তোমার HTML+JS আছে)
-// app.use(express.static("public"));
-
-// // Parse JSON body
-// app.use(express.json());
-
-// app.post("/download", async (req, res) => {
-//   const videoUrl = req.body.url;
-//   if (!videoUrl) return res.status(400).send("No URL provided");
-
-//   const outputPathTemplate = "downloads/%(title)s.%(ext)s";
-
-//   try {
-//     // ভিডিও ডাউনলোড করো
-//     const result = await ytdlp(videoUrl, {
-//       output: outputPathTemplate,
-//       format: "bestvideo+bestaudio/best",
-//       mergeOutputFormat: "mp4",
-//       cookies: "cookiesn.txt" // তোমার যদি cookies.txt থাকে
-//     });
-
-//     console.log(result);
-
-//     // সর্বশেষ তৈরি হওয়া ফাইল বের করো
-//     const files = fs.readdirSync("downloads");
-//     const newestFile = files
-//       .map(f => ({ name: f, time: fs.statSync(path.join("downloads", f)).mtime.getTime() }))
-//       .sort((a, b) => b.time - a.time)[0];
-
-//     const filePath = path.join("downloads", newestFile.name);
-//     const stat = fs.statSync(filePath);
-
-//     res.setHeader("Content-Length", stat.size);
-//     res.setHeader("Content-Disposition", `attachment; filename="${newestFile.name}"`);
-
-//     // ফাইল স্ট্রিম করে পাঠাও
-//     const readStream = fs.createReadStream(filePath);
-//     readStream.pipe(res);
-
-//     // ডাউনলোড শেষ হলে ফাইল মুছে ফেলো (optional)
-//     readStream.on("close", () => {
-//       fs.unlink(filePath, err => {
-//         if (err) console.error("Failed to delete file:", err);
-//       });
-//     });
-
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).send("Download failed");
-//   }
-// });
-
-// app.listen(port, () => {
-//   console.log(` Server running on http://localhost:${port}`);
-// });
-
-//==============================third edition=====================
-
-
-// const express = require("express");
-// const ytdlp = require("yt-dlp-exec");
-// const path = require("path");
-// const fs = require("fs");
-
-// const app = express();
-// const port = process.env.PORT || 3000;
-
-// // downloads ফোল্ডার যদি না থাকে তাহলে তৈরি করো
-// if (!fs.existsSync("downloads")) {
-//   fs.mkdirSync("downloads");
-// }
-
-// app.use(express.static("public"));  // তোমার public ফোল্ডার থেকে HTML, CSS, JS সার্ভ করবে
-// app.use(express.json());
-
-// app.post("/download", async (req, res) => {
-//   const videoUrl = req.body.url;
-//   if (!videoUrl) return res.status(400).send("No URL provided");
-
-//   const outputPathTemplate = "downloads/%(title)s.%(ext)s";
-
-//   try {
-//     // ভিডিও ডাউনলোড
-//     const result = await ytdlp(videoUrl, {
-//       output: outputPathTemplate,
-//       format: "bestvideo+bestaudio/best",
-//       mergeOutputFormat: "mp4",
-//       cookies: "cookiesn.txt"
-//     });
-
-//     console.log(result);
-
-//     // সর্বশেষ তৈরি হওয়া ফাইলটি খুঁজে বের করা
-//     const files = fs.readdirSync("downloads");
-//     const newestFile = files
-//       .map(f => ({
-//         name: f,
-//         time: fs.statSync(path.join("downloads", f)).mtime.getTime()
-//       }))
-//       .sort((a, b) => b.time - a.time)[0];
-
-//     const filePath = path.join("downloads", newestFile.name);
-//     const stat = fs.statSync(filePath);
-
-//     // Content-Length হেডার সেট করা
-//     res.setHeader("Content-Length", stat.size);
-
-//     // Content-Disposition হেডার (বাংলা নামের জন্য নিরাপদ)
-//     const filename = newestFile.name;
-//     res.setHeader(
-//       "Content-Disposition",
-//       `attachment; filename="${filename.replace(/"/g, "'")}"` +
-//       `; filename*=UTF-8''${encodeURIComponent(filename)}`
-//     );
-
-//     // ফাইল স্ট্রিম করে পাঠানো
-//     const readStream = fs.createReadStream(filePath);
-//     readStream.pipe(res);
-
-//     // স্ট্রিম শেষ হলে ফাইল মুছে ফেলা (optional)
-//     readStream.on("close", () => {
-//       fs.unlink(filePath, err => {
-//         if (err) console.error("Failed to delete file:", err);
-//       });
-//     });
-
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).send("Download failed");
-//   }
-// });
-
-// app.listen(port, () => {
-//   console.log(`✅ Server running on http://localhost:${port}`);
-// });
-
-
-
