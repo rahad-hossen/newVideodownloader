@@ -1,57 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
   <title>YouTube Downloader</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
-    input { width: 70%; padding: 10px; margin-right: 10px; }
-    button { padding: 10px 20px; background: #ff0000; color: white; border: none; cursor: pointer; }
-    #status { margin-top: 15px; color: #666; }
-  </style>
 </head>
 <body>
-  <h1>YouTube Downloader</h1>
-  <div>
-    <input type="text" id="url" placeholder="Enter YouTube URL">
-    <button onclick="download()">Download</button>
-  </div>
+  <h2>Download YouTube Video</h2>
+  <input type="text" id="url" placeholder="Enter YouTube URL" />
+  <button onclick="download()">Download</button>
   <p id="status"></p>
 
   <script>
     async function download() {
-      const url = document.getElementById('url').value.trim();
-      const status = document.getElementById('status');
-      
-      if (!url) {
-        status.textContent = 'Please enter a URL';
-        return;
-      }
+      const url = document.getElementById("url").value;
+      document.getElementById("status").textContent = "Downloading...";
 
-      status.textContent = 'Downloading...';
-      
-      try {
-        const response = await fetch('/download', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url })
-        });
+      const res = await fetch("/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
 
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Download failed');
-        }
-
-        const blob = await response.blob();
-        const downloadUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = 'video.mp4';
+      if (res.ok) {
+        const blob = await res.blob();
+        const a = document.createElement("a");
+        a.href = window.URL.createObjectURL(blob);
+        a.download = "video.mp4";
         a.click();
-        status.textContent = 'Download complete!';
-      } catch (err) {
-        status.textContent = `Error: ${err.message}`;
+        document.getElementById("status").textContent = "Downloaded!";
+      } else {
+        document.getElementById("status").textContent = "Download failed.";
       }
     }
   </script>
